@@ -236,7 +236,8 @@
                 .terminal-container { order: 2; }
                 .datamatrix-container { order: 3; }
                 .stats-grid { order: 4; }
-                #security-alert-card { order: 5; }
+                #system-reset { order: 5; }
+                #security-alert-card { order: 6; }
 
                 /* Stat Cards Section */
                 .stats-grid {
@@ -308,9 +309,9 @@
                 }
 
                 /* Right Column */
-                .content-column {
+                .right-column {
                     display: grid;
-                    grid-template-rows: auto auto 1fr;
+                    grid-template-rows: auto auto auto 1fr;
                     gap: var(--space-xl);
                 }
 
@@ -529,6 +530,10 @@
                             <div id="stat-cwd-full" class="card-footer">SCANNING...</div>
                         </div>
                     </div>
+                    <button id="system-reset" class="card" style="justify-self: end; font-weight: 900; background: var(--color-error); color: white; display: flex; gap: var(--space-sm); align-items: center; justify-content: center; cursor: pointer; padding: var(--space-sm) var(--space-md);">
+                        <span class="material-icons">refresh</span>
+                        RESET FILESYSTEM
+                    </button>
                 </div>
 
                 <div class="right-column">
@@ -722,12 +727,21 @@
                     generator.update(pixels)
                 }
 
+                const oldAfterCommand = env.sh.onAfterCommand
                 env.sh.onAfterCommand = () => {
+                    if (oldAfterCommand) oldAfterCommand()
                     updateSnapshot()
                 }
 
                 updateSnapshot()
                 setInterval(updateSnapshot, 2000)
+
+                document.getElementById("system-reset").addEventListener("click", () => {
+                    if (confirm("Are you sure you want to completely RESET the filesystem? All your files will be deleted.")) {
+                        localStorage.removeItem("minix-js-vfs-state")
+                        location.reload()
+                    }
+                })
             })
         </script>
     </body>

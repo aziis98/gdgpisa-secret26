@@ -25,6 +25,26 @@ export class VFS {
         }
         return res
     }
+    deserialize(data) {
+        this.root = this._deserializeNode(data, null)
+        this.root.parent = this.root
+        return this
+    }
+
+    _deserializeNode(data, parent) {
+        const node =
+            data.type === "dir"
+                ? this._mkdir(data.name, parent)
+                : this._mkfile(data.name, data.content, parent)
+        node.mtime = data.mtime
+        node.mode = data.mode
+        if (data.type === "dir") {
+            for (const [name, childData] of Object.entries(data.children)) {
+                node.children.set(name, this._deserializeNode(childData, node))
+            }
+        }
+        return node
+    }
 
     _mkdir(n, p) {
         return { type: "dir", name: n, children: new Map(), parent: p, mtime: Date.now(), mode: 0o755 }
@@ -34,17 +54,56 @@ export class VFS {
         return { type: "file", name, content, parent, mtime: Date.now(), mode: 0o644 }
     }
 
-    mk(path, content) {
+    _ensure(path) {
         const parts = path.split("/").filter(Boolean)
         let node = this.root
-        for (let i = 0; i < parts.length - 1; i++) {
-            if (!node.children.has(parts[i])) node.children.set(parts[i], this._mkdir(parts[i], node))
-            node = node.children.get(parts[i])
+        for (const p of parts) {
+            if (!node.children.has(p)) node.children.set(p, this._mkdir(p, node))
+            node = node.children.get(p)
+            if (node.type !== "dir") return null
         }
+        return node
+    }
 
-        const f = this._mkfile(parts.pop(), content, node)
-        node.children.set(f.name, f)
+    mk(path, content) {
+        const parts = path.split("/").filter(Boolean)
+        const name = parts.pop()
+        const parent = this._ensure(parts.join("/"))
+        if (!parent) return null
+        const f = this._mkfile(name, content, parent)
+        parent.children.set(f.name, f)
         return f
+    }
+
+    mkdir(path) {
+        const r = this._split(path)
+        if (!r) return null
+        if (r.parent.children.has(r.name)) return null
+        const d = this._mkdir(r.name, r.parent)
+        r.parent.children.set(d.name, d)
+        return d
+    }
+
+    rm(path, recursive = false) {
+        const node = this.resolve(path)
+        if (!node || node === this.root) return false
+        if (node.type === "dir" && node.children.size > 0 && !recursive) return false
+        node.parent.children.delete(node.name)
+        return true
+    }
+
+    rename(oldPath, newPath) {
+        const node = this.resolve(oldPath)
+        if (!node || node === this.root) return false
+        const r = this._split(newPath)
+        if (!r) return false
+        if (r.parent.children.has(r.name)) return false
+
+        node.parent.children.delete(node.name)
+        node.name = r.name
+        node.parent = r.parent
+        r.parent.children.set(node.name, node)
+        return true
     }
 
     resolve(path, base) {

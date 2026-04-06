@@ -35,17 +35,29 @@ export async function mount(element, options = {}) {
 
     const vfs = new VFS()
     
-    // User Context
-    vfs.mk("/home/user/devbot/vocab.json", vocabRaw)
-    vfs.mk("/home/user/devbot/infer.py", inferRaw)
-    vfs.mk("/home/user/devbot/model_weights.json", modelWeightsRaw)
-    vfs.mk("/home/user/hello.py", dedent(`
-        print("Hello from Python!")
-        name = input("Your name? ")
-        print(f"Hi, {name}")
-    `))
+    const STORAGE_KEY = "minix-js-vfs-state"
+    const savedState = localStorage.getItem(STORAGE_KEY)
 
-    vfs.cwd = vfs.resolve("/home/user")
+    if (savedState) {
+        try {
+            const data = JSON.parse(savedState)
+            vfs.deserialize(data.vfs)
+        } catch (e) {
+            console.error("Failed to restore state", e)
+        }
+    } else {
+        // User Context (Defaults)
+        vfs.mk("/home/user/devbot/vocab.json", vocabRaw)
+        vfs.mk("/home/user/devbot/infer.py", inferRaw)
+        vfs.mk("/home/user/devbot/model_weights.json", modelWeightsRaw)
+        vfs.mk("/home/user/hello.py", dedent(`
+            print("Hello from Python!")
+            name = input("Your name? ")
+            print(f"Hi, {name}")
+        `))
+    }
+
+    vfs.cwd = vfs.resolve("/home/user") || vfs.root
 
     const term = new Terminal({
         fontFamily: '"JetBrains Mono", "Cascadia Code", monospace',
@@ -87,7 +99,22 @@ export async function mount(element, options = {}) {
     window.addEventListener("resize", () => fit.fit())
 
     const sh = new Shell(vfs, term)
-    sh.env.set("PWD", "/home/user")
+    
+    if (savedState) {
+        try {
+            const data = JSON.parse(savedState)
+            if (data.shell) {
+                sh.history = data.shell.history || []
+                sh.env = new Map(Object.entries(data.shell.env || {}))
+                const savedCwd = data.shell.cwd ? vfs.resolve(data.shell.cwd) : null
+                if (savedCwd) vfs.cwd = savedCwd
+            }
+        } catch (e) {
+            console.error("Failed to restore shell state", e)
+        }
+    }
+
+    sh.env.set("PWD", vfs.pathOf(vfs.cwd))
 
     // --- Python I/O Management ---
     let pythonInputBuffer = ""
@@ -154,6 +181,19 @@ export async function mount(element, options = {}) {
     sh.onPythonInit = mountPythonInput
     sh.onPythonCleanup = unmountPythonInput
     sh.onReadLine = readLineAsync
+
+    const saveState = () => {
+        const state = {
+            vfs: vfs.serialize(),
+            shell: {
+                history: sh.history,
+                env: Object.fromEntries(sh.env.entries()),
+                cwd: vfs.pathOf(vfs.cwd)
+            }
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    }
+    sh.onAfterCommand = saveState
 
     // --- Filesystem Population ---
     
@@ -596,8 +636,230 @@ export async function mount(element, options = {}) {
         }),
     )
 
+    vfs.mk(
+        "/bin/mkdir",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: mkdir [FILE]...\nCreate the DIRECTORY(ies), if they do not already exist.\n"
+            }
+            const { fs } = ctx
+            if (!args.length) return "mkdir: missing operand\n"
+            for (const a of args) {
+                if (!fs.mkdir(a)) return `mkdir: cannot create directory '${a}': File exists or parent not found\n`
+            }
+            return null
+        })
+    )
+
+    vfs.mk(
+        "/bin/rm",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: rm [OPTION]... [FILE]...\nRemove (unlink) the FILE(s).\nOptions:\n  -r, -R  remove directories and their contents recursively\n"
+            }
+            const { fs, parseFlags } = ctx
+            const { flags, pos } = parseFlags(args)
+            const recursive = flags.has("r") || flags.has("R")
+            if (!pos.length) return "rm: missing operand\n"
+            for (const a of pos) {
+                if (!fs.rm(a, recursive)) return `rm: cannot remove '${a}': No such file or directory or directory not empty\n`
+            }
+            return null
+        })
+    )
+
+    vfs.mk(
+        "/bin/touch",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: touch [FILE]...\nUpdate the access and modification times of each FILE to the current time.\nA FILE argument that does not exist is created empty.\n"
+            }
+            const { fs } = ctx
+            if (!args.length) return "touch: missing operand\n"
+            for (const a of args) {
+                const node = fs.resolve(a)
+                if (node) node.mtime = Date.now()
+                else fs.mk(a, "")
+            }
+            return null
+        })
+    )
+
+    vfs.mk(
+        "/bin/cp",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: cp SOURCE DEST\nCopy SOURCE to DEST.\n"
+            }
+            const { fs } = ctx
+            if (args.length < 2) return "cp: missing destination file operand\n"
+            const [src, dst] = args
+            const node = fs.resolve(src)
+            if (!node || node.type !== "file") return `cp: cannot stat '${src}': No such file\n`
+            fs.write(dst, node.content)
+            return null
+        })
+    )
+
+    vfs.mk(
+        "/bin/mv",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: mv SOURCE DEST\nRename SOURCE to DEST.\n"
+            }
+            const { fs } = ctx
+            if (args.length < 2) return "mv: missing destination file operand\n"
+            const [src, dst] = args
+            if (!fs.rename(src, dst)) return `mv: cannot move '${src}' to '${dst}'\n`
+            return null
+        })
+    )
+
+    vfs.mk(
+        "/bin/edit",
+        createBinary(async (args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: edit [FILE]\nOpen a modal editor for FILE.\n"
+            }
+            const { fs } = ctx
+            const path = args[0]
+            if (!path) return "edit: missing file operand\n"
+            
+            const node = fs.resolve(path)
+            const content = node?.type === "file" ? node.content : ""
+
+            // Create modal
+            const overlay = document.createElement("div")
+            overlay.className = "minix-editor-overlay"
+            overlay.innerHTML = `
+                <div class="minix-editor-modal">
+                    <div class="minix-editor-header">
+                        <span>Editing: ${path}</span>
+                        <div class="minix-editor-controls">
+                            <button class="save-btn">Save (Ctrl+S)</button>
+                            <button class="close-btn">Close (Esc)</button>
+                        </div>
+                    </div>
+                    <textarea class="minix-editor-textarea" spellcheck="false">${content}</textarea>
+                </div>
+            `
+            document.body.appendChild(overlay)
+            
+            const textarea = overlay.querySelector("textarea")
+            textarea.focus()
+
+            return new Promise(resolve => {
+                const close = () => {
+                    overlay.remove()
+                    window.removeEventListener("keydown", onKey)
+                    resolve(null)
+                }
+                const save = () => {
+                    fs.write(path, textarea.value)
+                    // If onAfterCommand is available, it will be called by shell automatically after command completion.
+                    // But here we are in a Promise, so we might need to manually trigger sync if we want immediate persistence.
+                    // However, shell.exec awaits this result, so it's fine.
+                }
+
+                const onKey = (e) => {
+                    if (e.key === "Escape") close()
+                    if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault()
+                        save()
+                    }
+                }
+                window.addEventListener("keydown", onKey)
+                overlay.querySelector(".close-btn").addEventListener("click", close)
+                overlay.querySelector(".save-btn").addEventListener("click", () => {
+                    save()
+                    close()
+                })
+            })
+        })
+    )
+
+    // Add Editor CSS if not present
+    if (!document.getElementById("minix-editor-styles")) {
+        const style = document.createElement("style")
+        style.id = "minix-editor-styles"
+        style.innerHTML = `
+            .minix-editor-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                padding: 2rem;
+            }
+            .minix-editor-modal {
+                background: var(--color-bg-secondary, #fff);
+                border: 3px solid #000;
+                border-radius: 12px;
+                width: 100%;
+                max-width: 800px;
+                height: 80%;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 12px 12px 0 #000;
+                overflow: hidden;
+            }
+            .minix-editor-header {
+                padding: 1rem;
+                background: var(--color-accent, #a5d2ff);
+                border-bottom: 3px solid #000;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 900;
+                font-family: inherit;
+            }
+            .minix-editor-controls {
+                display: flex;
+                gap: 0.5rem;
+            }
+            .minix-editor-controls button {
+                padding: 4px 12px;
+                font-size: 0.75rem;
+                background: #fff;
+                border: 2px solid #000;
+                font-weight: 700;
+                cursor: pointer;
+            }
+            .minix-editor-controls button:hover {
+                background: #eee;
+            }
+            .minix-editor-textarea {
+                flex: 1;
+                padding: 1rem;
+                border: none;
+                resize: none;
+                font-family: "Roboto Mono", monospace;
+                font-size: 14px;
+                line-height: 1.5;
+                outline: none;
+                background: #fff;
+                color: #000;
+            }
+        `
+        document.head.appendChild(style)
+    }
+
+    vfs.mk(
+        "/bin/reset",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: reset\nClear all saved state and restart.\n"
+            }
+            localStorage.removeItem(STORAGE_KEY)
+            location.reload()
+            return "Resetting system...\n"
+        })
+    )
+
     // Welcome Message
-    // term.writeln(c("bGreen", "┌───(Linux)───"))
+    // term.writeln(c("bGreen", "┌───(MinixJS)───"))
     // term.writeln(c("bGreen", "│") + " Minimal metacircular shell + Python.")
     // term.writeln(c("bGreen", "└───") + c("bBlack", ' type "help" or "python hello.py".'))
     sh.prompt()
