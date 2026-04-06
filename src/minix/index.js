@@ -439,6 +439,91 @@ export async function mount(element, options = {}) {
             return results.join("\n") + (results.length ? "\n" : "")
         })
     )
+
+    vfs.mk(
+        "/bin/man",
+        createBinary((args, ctx) => {
+            const { c, wrap } = ctx
+            const width = ctx.term.cols || 80
+            
+            const title = "system manual"
+            const sideLen = Math.floor((width - title.length - 2) / 2)
+            const header = c("bBlack", "━".repeat(sideLen) + " ") + 
+                         c("bold", title) + 
+                         c("bBlack", " " + "━".repeat(width - sideLen - title.length - 2))
+
+            const actualWidth = sideLen * 2 + title.length + 2
+
+            // I clearly used an LLM for coloring this man page
+            const body = `
+                MinixJS is a small ${c("bGreen", "metacircular")} ${c("strike", "mock")} terminal environment running entirely in the browser.
+
+                The system integrates ${c("bCyan", "Pyodide")} for a complete Python3 runtime. This is required for ${c("bYellow", "infer.py")}, which uses Karpathy's microGPT architecture for a zero-dependency Python implementation for LLM inference.
+
+                Binaries in ${c("bBlue", "/bin/")} are modular JS files following a simple functional schema: ${c("bold", "(args, ctx) => string | Promise<string>")}. Minimal example:
+
+                    ${c("bRed", "export")} ${c("bRed", "default")} (${c("bBlue", "args")}, ${c("bBlue", "ctx")}) ${c("bold", "=>")} {
+                        ${c("bRed", "return")} ${c("bGreen", "\"Hello \"")} + ${c("bBlue", "args")}[${c("bMagenta", "0")}];
+                    }
+                
+                This was just made for fun, initially I hoped of using Fabrice Bellard's JSLinux to run a real linux kernel in the browser, but for reasons¹ I couldn't easily add python support to it. So I decided to make this fake terminal in pure js using ${c("bBlue", "xterm.js")}. I think I'll publish this with the microgpt training code on ${c("bBlue", "GitHub")} after the event.
+                ${" ".repeat(actualWidth - "by @aziis98".length)}by ${c("bMagenta", "@aziis98")}
+                ${c("dim", `¹: Feel free to ask me at "birrata" if you want to know more`)}
+            `
+            return `${header}\n${wrap(body, actualWidth)}\n`
+        })
+    )
+
+    vfs.mk(
+        "/bin/head",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: head [OPTION]... [FILE]...\nPrint the first 10 lines of each FILE to standard output.\nOptions:\n  -n NUM      print the first NUM lines instead of the first 10\n  -h, --help  display this help and exit\n"
+            }
+            const { parseFlags, fs, stdin } = ctx
+            const { flags, pos } = parseFlags(args)
+            let n = 10
+            let files = pos
+            if (flags.has("n")) {
+                n = parseInt(pos[0]) || 10
+                files = pos.slice(1)
+            }
+            const headLines = (text) => text.split("\n").slice(0, n).join("\n") + "\n"
+            if (!files.length) return headLines(stdin || "")
+            return files.map(f => {
+                const node = fs.resolve(f)
+                if (!node || node.type !== "file") return `head: ${f}: No such file\n`
+                return headLines(node.content)
+            }).join("")
+        })
+    )
+
+    vfs.mk(
+        "/bin/tail",
+        createBinary((args, ctx) => {
+            if (args.includes("-h") || args.includes("--help")) {
+                return "Usage: tail [OPTION]... [FILE]...\nPrint the last 10 lines of each FILE to standard output.\nOptions:\n  -n NUM      print the last NUM lines instead of the last 10\n  -h, --help  display this help and exit\n"
+            }
+            const { parseFlags, fs, stdin } = ctx
+            const { flags, pos } = parseFlags(args)
+            let n = 10
+            let files = pos
+            if (flags.has("n")) {
+                n = parseInt(pos[0]) || 10
+                files = pos.slice(1)
+            }
+            const tailLines = (text) => {
+                const lines = text.split("\n")
+                return lines.slice(Math.max(0, lines.length - n)).join("\n") + "\n"
+            }
+            if (!files.length) return tailLines(stdin || "")
+            return files.map(f => {
+                const node = fs.resolve(f)
+                if (!node || node.type !== "file") return `tail: ${f}: No such file\n`
+                return tailLines(node.content)
+            }).join("")
+        })
+    )
     vfs.mk(
         "/bin/python",
         createBinary(async (args, ctx) => {

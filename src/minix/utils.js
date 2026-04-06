@@ -14,8 +14,45 @@ export const A = {
     bBlack: "\x1b[90m",
     bRed: "\x1b[91m",
     bGreen: "\x1b[92m",
+    bYellow: "\x1b[93m",
     bBlue: "\x1b[94m",
     bMagenta: "\x1b[95m",
+    bCyan: "\x1b[96m",
+    strike: "\x1b[9m",
+}
+
+export const stripAnsi = s => s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+
+export const wrap = (text, width) => {
+    const lines = text.split("\n")
+    while (lines.length > 0 && lines[0].trim().length === 0) lines.shift()
+    while (lines.length > 0 && lines.at(-1).trim().length === 0) lines.pop()
+    const prefix = lines[0]?.match(/^\s*/)?.[0] || ""
+    
+    return lines.map(line => line.startsWith(prefix) ? line.slice(prefix.length) : line).map(line => {
+        if (stripAnsi(line).length <= width) return line
+        
+        let out = []
+        let curLine = ""
+        let curLen = 0
+        
+        // Split by words but keep spaces
+        const words = line.split(/(\s+)/)
+        for (const word of words) {
+            const stripped = stripAnsi(word)
+            if (curLen + stripped.length > width && curLen > 0) {
+                out.push(curLine.trimEnd())
+                // If the word starts with space and we wrap, skip the leading space
+                curLine = word.trimStart()
+                curLen = stripAnsi(curLine).length
+            } else {
+                curLine += word
+                curLen += stripped.length
+            }
+        }
+        out.push(curLine)
+        return out.join("\n")
+    }).join("\n")
 }
 
 export const c = (col, s) => A[col] + s + A.reset

@@ -118,7 +118,9 @@ class GPTModel(nn.Module):
             scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim**0.5)
 
             # Causal mask
-            mask = torch.triu(torch.ones(seq_len, seq_len, device=scores.device), diagonal=1).bool()
+            mask = torch.triu(
+                torch.ones(seq_len, seq_len, device=scores.device), diagonal=1
+            ).bool()
             scores = scores.masked_fill(mask.unsqueeze(0).unsqueeze(0), float("-inf"))
 
             # Softmax and apply to values
@@ -127,7 +129,9 @@ class GPTModel(nn.Module):
 
             # Reshape back
             attn_output = attn_output.transpose(1, 2).contiguous()
-            attn_output = attn_output.view(batch_size, seq_len, self.n_head * self.head_dim)
+            attn_output = attn_output.view(
+                batch_size, seq_len, self.n_head * self.head_dim
+            )
 
             # Output projection
             x = layer_dict["attn_wo"](attn_output)  # type: ignore
@@ -161,10 +165,18 @@ optimizer = Adam(model.parameters(), lr=0.01, betas=(0.85, 0.99), eps=1e-8)
 # Parse CLI arguments
 parser = argparse.ArgumentParser(description="Train GPT model")
 parser.add_argument(
-    "-n", "--num-steps", type=int, default=500, help="Number of training steps (default: 500)"
+    "-n",
+    "--num-steps",
+    type=int,
+    default=500,
+    help="Number of training steps (default: 500)",
 )
 parser.add_argument(
-    "-t", "--temperature", type=float, default=0.1, help="Temperature for generation (default: 0.1)"
+    "-t",
+    "--temperature",
+    type=float,
+    default=0.1,
+    help="Temperature for generation (default: 0.1)",
 )
 args = parser.parse_args()
 
@@ -177,7 +189,9 @@ def generate_from_prompt(model, prompt, device, context_size, uchars, temperatur
         while len(tokens) < context_size:
             # Pass the entire sequence generated so far for attention history
             tok = torch.tensor([tokens], dtype=torch.long, device=device)
-            pos = torch.tensor([list(range(len(tokens)))], dtype=torch.long, device=device)
+            pos = torch.tensor(
+                [list(range(len(tokens)))], dtype=torch.long, device=device
+            )
 
             logits = model(tok, pos)
 
@@ -217,14 +231,18 @@ def compute_generation_score_no_early_stopping(target, generated, prefix):
     gen_remaining = gen_clean[len(prefix) :]
     phrase_remaining = target[len(prefix) :]
 
-    correct_chars = sum(1 for g_char, p_char in zip(gen_remaining, phrase_remaining) if g_char == p_char)
+    correct_chars = sum(
+        1 for g_char, p_char in zip(gen_remaining, phrase_remaining) if g_char == p_char
+    )
 
     if not phrase_remaining:
         return 1.0 if gen_clean == target else 0.0
     return correct_chars / len(phrase_remaining)
 
 
-def validate_generation(model, device, context_size, uchars, training_phrases, temperature=0.5):
+def validate_generation(
+    model, device, context_size, uchars, training_phrases, temperature=0.5
+):
     """Check if model can generate all training phrases using first word as prompt."""
     results = {}
     model.eval()
@@ -240,13 +258,23 @@ def validate_generation(model, device, context_size, uchars, training_phrases, t
                 continue
 
             # Generate from first word
-            generated = generate_from_prompt(model, first_word, device, context_size, uchars, temperature)
-            score = compute_generation_score_no_early_stopping(phrase_clean, generated, first_word)
+            generated = generate_from_prompt(
+                model, first_word, device, context_size, uchars, temperature
+            )
+            score = compute_generation_score_no_early_stopping(
+                phrase_clean, generated, first_word
+            )
 
-            results[phrase] = {"generated": generated, "prompt": first_word, "score": score}
+            results[phrase] = {
+                "generated": generated,
+                "prompt": first_word,
+                "score": score,
+            }
 
     model.train()
-    avg_score = sum(r["score"] for r in results.values()) / len(results) if results else 0.0
+    avg_score = (
+        sum(r["score"] for r in results.values()) / len(results) if results else 0.0
+    )
     return avg_score, results
 
 
@@ -287,7 +315,9 @@ for step in range(num_steps):
     logits = model(token_ids, positions)
 
     # Loss - using ignore_index=-100 ensures we only train on the actual characters
-    loss = F.cross_entropy(logits.view(-1, vocab_size), target_ids.view(-1), ignore_index=-100)
+    loss = F.cross_entropy(
+        logits.view(-1, vocab_size), target_ids.view(-1), ignore_index=-100
+    )
 
     # Backward pass
     optimizer.zero_grad()
@@ -309,11 +339,15 @@ for step in range(num_steps):
 
         status = "✓ PERFECT" if avg_score == 1.0 else f"Learning ({avg_score:.2%})"
 
-        output_lines = [f"step {step + 1:4d} / {num_steps:4d} | loss {loss.item():.4f} | {status}"]
+        output_lines = [
+            f"step {step + 1:4d} / {num_steps:4d} | loss {loss.item():.4f} | {status}"
+        ]
         for phrase, result in val_results.items():
             score_pct = f"{result['score']:.1%}"
             p = f"'{result['prompt']}'"
-            output_lines.append(f"  [{score_pct:>6}] {p:>10} => '{result['generated'].strip()}'")
+            output_lines.append(
+                f"  [{score_pct:>6}] {p:>10} => '{result['generated'].strip()}'"
+            )
 
         sys.stdout.write("\033[?2026h")
         if last_output_height > 0:
@@ -324,9 +358,9 @@ for step in range(num_steps):
         last_output_height = len(output_lines)
 
         # Break early if perfect
-        if avg_score == 1.0:
-            print("\nPerfect memorization reached! Stopping early.")
-            break
+        # if avg_score == 1.0:
+        #     print("\nPerfect memorization reached! Stopping early.")
+        #     break
 
 # Convert model to compatible format
 print("\nExporting model weights...")
@@ -366,4 +400,6 @@ serialized_with_config = {
 with open("model_weights.json", "w") as f:
     json.dump(serialized_with_config, f, indent=2)  # Removed indent=2 to save space
 
-print(f"Training complete. Output size: {os.path.getsize('model_weights.json') / 1024:.2f} KB")
+print(
+    f"Training complete. Output size: {os.path.getsize('model_weights.json') / 1024:.2f} KB"
+)

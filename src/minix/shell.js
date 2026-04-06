@@ -1,4 +1,4 @@
-import { A, c, parseFlags, loadBin } from "./utils.js"
+import { A, c, dedent, wrap, parseFlags, loadBin } from "./utils.js"
 import { runPythonAsync } from "./python-runner.js"
 
 /**
@@ -251,7 +251,10 @@ export class Shell {
         if (cur) tokens.push(cur)
         const args = tokens.map(t =>
             t.replace(/\$(\w+|\{.*?\})/g, (_, v) => this.env.get(v.replace(/[{}]/g, "")) || ""),
-        )
+        ).flatMap(arg => {
+            const match = arg.match(/^-([a-zA-Z])(\d+)$/)
+            return match ? [`-${match[1]}`, match[2]] : [arg]
+        })
 
         let outFile = null,
             append = false,
@@ -307,6 +310,8 @@ export class Shell {
                 term: this.term,
                 A,
                 c,
+                dedent,
+                wrap,
                 parseFlags,
                 runPythonAsync,
                 sh: this,
