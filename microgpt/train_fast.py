@@ -34,7 +34,7 @@ print(f"vocab size: {vocab_size}")
 
 # Export vocabulary for inference
 with open("vocab.json", "w") as f:
-    json.dump(uchars, f)
+    json.dump(uchars, f, indent=2)
 
 # ---------------------------------------------------------
 # ARCHITECTURE TWEAKS FOR MEMORIZATION & SMALL FILE SIZE
@@ -301,7 +301,7 @@ for step in range(num_steps):
     optimizer.step()
 
     # print(f"step {step + 1:4d} / {num_steps:4d} | loss {loss.item():.4f}", end="\r")
-    if (step + 1) % max(1, int(num_steps * 0.01)) == 0:
+    if (step + 1) % max(1, int(num_steps * 0.05)) == 0:
         # Validate generation
         avg_score, val_results = validate_generation(
             model, device, context_size, uchars, docs, args.temperature
@@ -364,6 +364,6 @@ serialized_with_config = {
 }
 
 with open("model_weights.json", "w") as f:
-    json.dump(serialized_with_config, f)  # Removed indent=2 to save space
+    json.dump(serialized_with_config, f, indent=2)  # Removed indent=2 to save space
 
 print(f"Training complete. Output size: {os.path.getsize('model_weights.json') / 1024:.2f} KB")

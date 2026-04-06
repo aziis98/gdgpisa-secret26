@@ -1,13 +1,738 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>secret26</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+        <title>secret26 - GDGPisa Secret DevFest 2026 CTF</title>
+        <style>
+            @layer reset, base, theme, components, layout;
+
+            @layer reset {
+                @font-face {
+                    font-family: 'Product Sans';
+                    src: url('./src/fonts/product-sans-regular.ttf') format('truetype');
+                    font-weight: 400;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Product Sans';
+                    src: url('./src/fonts/product-sans-bold.ttf') format('truetype');
+                    font-weight: 700;
+                    font-style: normal;
+                }
+                @font-face {
+                    font-family: 'Product Sans';
+                    src: url('./src/fonts/product-sans-italic.ttf') format('truetype');
+                    font-weight: 400;
+                    font-style: italic;
+                }
+                @font-face {
+                    font-family: 'Product Sans';
+                    src: url('./src/fonts/product-sans-bold-italic.ttf') format('truetype');
+                    font-weight: 700;
+                    font-style: italic;
+                }
+
+                *,
+                *::before,
+                *::after {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+
+                html {
+                    height: 100%;
+                }
+
+                body {
+                    height: 100%;
+                    font-family: "Product Sans", "Inter", sans-serif;
+                    line-height: 1.5;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                }
+            }
+
+            @layer theme {
+                :root {
+                    color-scheme: light dark;
+
+                    --color-bg: #f0f0f0;
+                    --color-bg-secondary: #ffffff;
+                    --color-border: #000000;
+                    --color-text: #000000;
+                    --color-text-secondary: #333333;
+                    --color-accent: #a5d2ff;
+                    --color-accent-light: #d6ebff;
+                    --color-success: #00e676;
+                    --color-error: #ff5252;
+                    --color-warning: #ffab40;
+                    --color-shadow: #333333;
+
+                    --radius: 12px;
+                    --radius-lg: 16px;
+
+                    --border-width: 3px;
+
+                    --shadow-sm: 4px 4px 0 0 var(--color-shadow);
+                    --shadow-md: 8px 8px 0 0 var(--color-shadow);
+                    --shadow-lg: 12px 12px 0 0 var(--color-shadow);
+
+                    --space-xs: 4px;
+                    --space-sm: 8px;
+                    --space-md: 16px;
+                    --space-lg: 24px;
+                    --space-xl: 32px;
+                }
+
+                @media (prefers-color-scheme: dark) {
+                    :root {
+                        --color-bg: #444444;
+                        --color-bg-secondary: #222222;
+                        --color-border: #ffffff;
+                        --color-text: #ffffff;
+                        --color-text-secondary: #e0e0e0;
+                        --color-accent: #a5d2ff;
+                        --color-accent-light: #555555;
+                        --color-shadow: #333333;
+                        --shadow-sm: 4px 4px 0 0 var(--color-shadow);
+                        --shadow-md: 8px 8px 0 0 var(--color-shadow);
+                        --shadow-lg: 12px 12px 0 0 var(--color-shadow);
+                    }
+                }
+
+                html[data-theme="light"] {
+                    --color-bg: #f0f0f0;
+                    --color-bg-secondary: #ffffff;
+                    --color-border: #000000;
+                    --color-text: #000000;
+                    --color-text-secondary: #333333;
+                    --color-shadow: #333333;
+                    --shadow-sm: 4px 4px 0 0 var(--color-shadow);
+                    --shadow-md: 8px 8px 0 0 var(--color-shadow);
+                    --shadow-lg: 12px 12px 0 0 var(--color-shadow);
+                }
+
+                html[data-theme="dark"] {
+                    --color-bg: #444444;
+                    --color-bg-secondary: #222222;
+                    --color-border: #ffffff;
+                    --color-text: #ffffff;
+                    --color-text-secondary: #e0e0e0;
+                    --color-shadow: #333333;
+                    --shadow-sm: 4px 4px 0 0 var(--color-shadow);
+                    --shadow-md: 8px 8px 0 0 var(--color-shadow);
+                    --shadow-lg: 12px 12px 0 0 var(--color-shadow);
+                }
+            }
+
+            @layer base {
+                body {
+                    background-color: var(--color-bg);
+                    color: var(--color-text);
+                    transition:
+                        background-color 0.2s ease,
+                        color 0.2s ease;
+                }
+            }
+
+            @layer layout {
+                #app {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100vh;
+                    background-color: var(--color-bg);
+                }
+
+                /* Navbar */
+                nav {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    align-items: center;
+                    gap: var(--space-lg);
+                    padding: var(--space-md) var(--space-xl);
+                    background-color: var(--color-bg-secondary);
+                    border-bottom: var(--border-width) solid var(--color-border);
+                    z-index: 10;
+                    box-shadow: 0 4px 0 0 var(--color-border);
+                }
+
+                .nav-brand {
+                    font-size: 1rem;
+                    font-weight: 900;
+                    letter-spacing: -0.02em;
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-md);
+                }
+
+                .window-dots {
+                    display: flex;
+                    gap: 8px;
+                }
+
+                .window-dot {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    border: 2px solid var(--color-border);
+                }
+
+                .window-dot.red { background-color: #ff5f57; }
+                .window-dot.yellow { background-color: #febc2e; }
+                .window-dot.green { background-color: #28c840; }
+
+                .nav-controls {
+                    display: grid;
+                    grid-template-columns: repeat(3, auto);
+                    gap: var(--space-md);
+                    align-items: center;
+                }
+
+                /* Main Content Grid */
+                main {
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--space-lg);
+                    padding: var(--space-md);
+                    overflow-y: auto;
+                    align-items: stretch;
+                }
+
+                @media (min-width: 1024px) {
+                    main {
+                        display: grid;
+                        grid-template-columns: 340px 1fr;
+                        padding: var(--space-xl);
+                        gap: var(--space-xl);
+                        align-items: start;
+                    }
+                }
+
+                /* Mobile Layout - Flatten containers */
+                .left-column, .right-column {
+                    display: contents;
+                }
+
+                @media (min-width: 1024px) {
+                    .left-column, .right-column {
+                        display: grid;
+                        grid-template-columns: 1fr;
+                        gap: var(--space-xl);
+                    }
+                }
+
+                /* Mobile Ordering */
+                .prompt-card { order: 1; }
+                .terminal-container { order: 2; }
+                .datamatrix-container { order: 3; }
+                .stats-grid { order: 4; }
+                #security-alert-card { order: 5; }
+
+                /* Stat Cards Section */
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: var(--space-md);
+                }
+
+                .card {
+                    padding: var(--space-md);
+                    background-color: var(--color-bg-secondary);
+                    border: var(--border-width) solid var(--color-border);
+                    border-radius: var(--radius);
+                    box-shadow: var(--shadow-sm);
+                }
+
+                .card-header {
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-sm);
+                    margin-bottom: var(--space-sm);
+                }
+
+                .card-title {
+                    font-size: 0.75rem;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+
+                .card-value {
+                    font-family: "Roboto Mono", monospace;
+                    font-size: 1.5rem;
+                    font-weight: 800;
+                    color: var(--color-accent);
+                }
+
+                .card-footer {
+                    font-size: 0.7rem;
+                    color: var(--color-text-secondary);
+                    margin-top: var(--space-xs);
+                    font-weight: 600;
+                }
+
+                /* Datamatrix Container */
+                .datamatrix-container {
+                    display: grid;
+                    width: 100%;
+                    max-width: 340px;
+                    aspect-ratio: 1 / 1;
+                    overflow: clip;
+                    background-color: var(--color-bg-secondary);
+                    border: var(--border-width) solid var(--color-border);
+                    border-radius: var(--radius-lg);
+                    box-shadow: var(--shadow-md);
+                    place-items: center;
+                    margin: 0 auto;
+                }
+
+                .datamatrix-container canvas {
+                    width: 100%;
+                    height: 100%;
+                    image-rendering: pixelated;
+                    display: block;
+                }
+
+                .datamatrix-cell {
+                    transition: fill-opacity 0.2s ease;
+                }
+
+                /* Right Column */
+                .content-column {
+                    display: grid;
+                    grid-template-rows: auto auto 1fr;
+                    gap: var(--space-xl);
+                }
+
+                /* Prompt Card */
+                .prompt-card {
+                    padding: var(--space-md);
+                    background-color: var(--color-accent);
+                    color: #000;
+                    border: var(--border-width) solid var(--color-border);
+                    border-radius: var(--radius-lg);
+                    box-shadow: var(--shadow-md);
+                }
+
+                @media (min-width: 1024px) {
+                    .prompt-card { padding: var(--space-xl); }
+                }
+
+                .prompt-title {
+                    font-size: 0.875rem;
+                    font-weight: 900;
+                    color: var(--color-text);
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    margin-bottom: var(--space-lg);
+                    display: block;
+                }
+
+                .prompt-text {
+                    font-family: "Roboto Mono", monospace;
+                    font-size: 0.9375rem;
+                    color: var(--color-text);
+                    line-height: 1.7;
+                    word-break: break-word;
+                    font-weight: 500;
+                }
+
+                .prompt-text p + p {
+                    margin-top: 1.25rem;
+                }
+
+                /* Fake Terminal */
+                .terminal-container {
+                    background-color: var(--color-bg-secondary);
+                    border: var(--border-width) solid var(--color-border);
+                    border-radius: var(--radius-lg);
+                    box-shadow: var(--shadow-md);
+                    padding: 0.5rem;
+                    background-color: #000;
+                    overflow: hidden;
+                    flex-shrink: 0;
+                }
+                
+                @media (min-width: 1024px) {
+                    .terminal-container { padding: 1rem; }
+                }
+
+                .minix-shell {
+                    height: min(25rem, 66vh);
+                    width: 100%;
+                    border-radius: 8px;
+                    font-family: "Roboto Mono", monospace;
+                    font-size: 0.875rem;
+                    overflow-y: auto;
+                    font-weight: 500;
+                }
+
+                .terminal-line {
+                    color: var(--color-text);
+                    margin-bottom: var(--space-md);
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-md);
+                }
+
+                .terminal-prompt {
+                    color: var(--color-accent);
+                    font-weight: 900;
+                }
+
+                .terminal-output {
+                    color: var(--color-text);
+                }
+
+                .terminal-success {
+                    color: var(--color-success);
+                    font-weight: 700;
+                }
+
+                .terminal-error {
+                    color: var(--color-error);
+                    font-weight: 700;
+                }
+
+                .cursor {
+                    display: inline-block;
+                    width: 12px;
+                    height: 1.2em;
+                    background-color: var(--color-accent);
+                    border: 2px solid var(--color-border);
+                    animation: blink 0.8s steps(2, start) infinite;
+                    margin-left: 4px;
+                }
+
+                @keyframes blink {
+                    0%,
+                    50% {
+                        opacity: 1;
+                    }
+                    51%,
+                    100% {
+                        opacity: 0;
+                    }
+                }
+            }
+
+            @layer components {
+                button {
+                    background: var(--color-bg-secondary);
+                    border: var(--border-width) solid var(--color-border);
+                    cursor: pointer;
+                    padding: var(--space-sm);
+                    border-radius: var(--radius);
+                    color: var(--color-text);
+                    transition: all 0.1s ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: var(--shadow-sm);
+                }
+
+                button:hover {
+                    transform: translate(-2px, -2px);
+                    box-shadow: 6px 6px 0 0 var(--color-border);
+                    background-color: var(--color-accent);
+                }
+
+                button:active {
+                    transform: translate(2px, 2px);
+                    box-shadow: 0 0 0 0 var(--color-border);
+                }
+
+                button.active {
+                    background-color: var(--color-accent);
+                    color: var(--color-text);
+                }
+
+                .material-icons {
+                    font-size: 1.5rem;
+                    user-select: none;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <nav>
+                <div class="nav-brand">
+                    <div class="window-dots">
+                        <div class="window-dot red"></div>
+                        <div class="window-dot yellow"></div>
+                        <div class="window-dot green"></div>
+                    </div>
+                    <span>GDGPisa Secret DevFest 2026 CTF</span>
+                </div>
+                <div></div>
+                <div class="nav-controls">
+                    <button id="theme-system" title="System theme">
+                        <span class="material-icons">brightness_auto</span>
+                    </button>
+                    <button id="theme-light" title="Light theme">
+                        <span class="material-icons">light_mode</span>
+                    </button>
+                    <button id="theme-dark" title="Dark theme">
+                        <span class="material-icons">dark_mode</span>
+                    </button>
+                </div>
+            </nav>
+
+            <main>
+                <div class="left-column">
+                    <div class="datamatrix-container">
+                        <canvas id="datamatrix-canvas" width="64" height="64"></canvas>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="material-icons" style="color: var(--color-success)">storage</span>
+                                <span class="card-title">VFS Nodes</span>
+                            </div>
+                            <div id="stat-vfs-nodes" class="card-value">0</div>
+                            <div id="stat-vfs-status" class="card-footer">STATUS: OK</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="material-icons" style="color: var(--color-accent)">analytics</span>
+                                <span class="card-title">Memory Dump</span>
+                            </div>
+                            <div id="stat-memory-size" class="card-value">0 B</div>
+                            <div id="stat-memory-last" class="card-footer">SYNCED: 0s ago</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="material-icons" style="color: var(--color-error)">terminal</span>
+                                <span class="card-title">Shell Commands</span>
+                            </div>
+                            <div id="stat-shell-cmds" class="card-value" style="color: var(--color-error)">0</div>
+                            <div id="stat-shell-cwd" class="card-footer">PATH: /</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="material-icons" style="color: var(--color-warning)">folder</span>
+                                <span class="card-title">Current Dir</span>
+                            </div>
+                            <div id="stat-cwd-short" class="card-value">/</div>
+                            <div id="stat-cwd-full" class="card-footer">SCANNING...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="prompt-card">
+                        <div class="prompt-title">Challenge Description</div>
+                        <div class="prompt-text">
+                            <p>
+                                Congratulations on uncovering the DevFest challenge.
+                            </p>
+                            <p>
+                                During the development of <strong>DevBot</strong>, a critical system failure resulted in the loss of both the training code and its primary dataset. Our objective is clear: execute a localized recovery of the <strong>classified secret code</strong>.
+                            </p>
+                            <p>
+                                Time is of the essence. A generous prize awaits the operative who retrieves it first. The terminal below grants you direct access to the isolated environment. Good luck.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="terminal-container">
+                        <div class="minix-shell"></div>
+                    </div>
+
+                    <div id="security-alert-card" class="card" style="background-color: #e76f51; color: #fff; border-color: #000;">
+                        <div class="card-header">
+                            <span class="material-icons">priority_high</span>
+                            <span class="card-title">Security Alert: Sector 7</span>
+                        </div>
+                        <div style="font-size: 0.9rem; font-weight: 700; border-top: 2px solid rgba(0,0,0,0.2); padding-top: var(--space-sm);">
+                            CRITICAL SYSTEM BREACH DETECTED. RECOVERY OF DEV-BOT MICRO-GPT CORE IS MANDATORY. SECURE THE CODE BEFORE NEXT SYNC.
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <script type="module">
+            // Theme Management
+            class ThemeManager {
+                constructor() {
+                    this.STORAGE_KEY = "ctf-theme-preference"
+                    this.THEME_SYSTEM = "system"
+                    this.THEME_LIGHT = "light"
+                    this.THEME_DARK = "dark"
+                    this.init()
+                }
+
+                init() {
+                    this.prefersDark = window.matchMedia("(prefers-color-scheme: dark)")
+                    this.prefersDark.addEventListener("change", () => this.updateTheme())
+                    this.loadTheme()
+                    this.setupButtons()
+                }
+
+                loadTheme() {
+                    const saved = localStorage.getItem(this.STORAGE_KEY) || this.THEME_SYSTEM
+                    this.setTheme(saved)
+                }
+
+                setTheme(theme) {
+                    localStorage.setItem(this.STORAGE_KEY, theme)
+
+                    if (theme === this.THEME_SYSTEM) {
+                        document.documentElement.removeAttribute("data-theme")
+                    } else {
+                        document.documentElement.setAttribute("data-theme", theme)
+                    }
+
+                    this.updateButtons()
+                }
+
+                updateTheme() {
+                    const current = localStorage.getItem(this.STORAGE_KEY)
+                    if (current === this.THEME_SYSTEM) {
+                        this.updateButtons()
+                    }
+                }
+
+                updateButtons() {
+                    const current = localStorage.getItem(this.STORAGE_KEY) || this.THEME_SYSTEM
+                    document.querySelectorAll(".nav-controls button").forEach(btn => {
+                        btn.classList.remove("active")
+                    })
+
+                    const activeBtn = document.getElementById(`theme-${current}`)
+                    if (activeBtn) {
+                        activeBtn.classList.add("active")
+                    }
+                }
+
+                setupButtons() {
+                    document.getElementById("theme-system").addEventListener("click", () => {
+                        this.setTheme(this.THEME_SYSTEM)
+                    })
+
+                    document.getElementById("theme-light").addEventListener("click", () => {
+                        this.setTheme(this.THEME_LIGHT)
+                    })
+
+                    document.getElementById("theme-dark").addEventListener("click", () => {
+                        this.setTheme(this.THEME_DARK)
+                    })
+                }
+            }
+
+            // Datamatrix Generator
+            class DatamatrixGenerator {
+                constructor(size = 64) {
+                    this.size = size
+                    this.canvas = document.getElementById("datamatrix-canvas")
+                    this.ctx = this.canvas.getContext("2d")
+                    this.imgData = this.ctx.createImageData(size, size)
+                }
+
+                update(pixelValues) {
+                    const data = this.imgData.data
+                    for (let i = 0; i < pixelValues.length; i++) {
+                        const val = pixelValues[i] || 0
+                        const idx = i * 4
+                        data[idx] = val
+                        data[idx + 1] = val
+                        data[idx + 2] = val
+                        data[idx + 3] = 255
+                    }
+                    this.ctx.putImageData(this.imgData, 0, 0)
+                }
+            }
+
+            // Initialize on page load
+            import { mount } from "./src/minix/index.js"
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                new ThemeManager()
+                const generator = new DatamatrixGenerator(64)
+                
+                const env = await mount(".minix-shell")
+
+                // Live RAM Snapshot System
+                const encoder = new TextEncoder()
+                const countNodes = (node) => {
+                    let count = 1
+                    if (node.type === "dir" && node.children) {
+                        for (const child of Object.values(node.children)) {
+                            count += countNodes(child)
+                        }
+                    }
+                    return count
+                }
+
+                const updateSnapshot = () => {
+                    const state = env.serialize()
+                    const json = JSON.stringify(state)
+                    
+                    // Update Stats Grid
+                    document.getElementById("stat-vfs-nodes").textContent = countNodes(state.vfs)
+                    document.getElementById("stat-vfs-status").textContent = `STATUS: READY (${(json.length / 1024).toFixed(1)} KB)`
+                    
+                    document.getElementById("stat-memory-size").textContent = `${(json.length / 1024).toFixed(1)} KB`
+                    document.getElementById("stat-memory-last").textContent = `SYNCED: ${new Date().toLocaleTimeString()}`
+                    
+                    document.getElementById("stat-shell-cmds").textContent = state.shell.history.length
+                    document.getElementById("stat-shell-cwd").textContent = `PATH: ${state.shell.cwd}`
+                    
+                    const cwdParts = state.shell.cwd.split("/")
+                    document.getElementById("stat-cwd-short").textContent = cwdParts[cwdParts.length - 1] || "/"
+                    document.getElementById("stat-cwd-full").textContent = state.shell.cwd
+
+                    // Continue with Datamatrix rendering
+                    const data = encoder.encode(json)
+                    const pixels = new Uint8Array(4096)
+                    
+                    const chunkSize = Math.max(1, Math.ceil(data.length / 4096))
+                    
+                    for (let i = 0; i < 4096; i++) {
+                        const start = i * chunkSize
+                        if (start >= data.length) break
+                        
+                        const end = Math.min(start + chunkSize, data.length)
+                        let min = 255, max = 0
+                        for (let j = start; j < end; j++) {
+                            const v = data[j]
+                            if (v < min) min = v
+                            if (v > max) max = v
+                        }
+                        
+                        const middleIdx = Math.floor((start + end) / 2)
+                        const val = data[middleIdx]
+                        
+                        if (max !== min) {
+                            pixels[i] = Math.floor(((val - min) / (max - min)) * 255)
+                        } else {
+                            pixels[i] = val
+                        }
+                    }
+                    
+                    generator.update(pixels)
+                }
+
+                env.sh.onAfterCommand = () => {
+                    updateSnapshot()
+                }
+
+                updateSnapshot()
+                setInterval(updateSnapshot, 2000)
+            })
+        </script>
+    </body>
 </html>
