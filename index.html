@@ -64,15 +64,21 @@
                 }
 
                 html {
-                    height: 100%;
+                    min-height: 100%;
                 }
 
                 body {
-                    height: 100%;
+                    min-height: 100%;
                     font-family: "Product Sans", "Inter", sans-serif;
                     line-height: 1.5;
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
+                }
+
+                /* xterm firefox bug */
+
+                body > div:last-child:has(> span) {
+                    position: fixed !important;
                 }
             }
 
@@ -163,7 +169,7 @@
                 #app {
                     display: flex;
                     flex-direction: column;
-                    height: 100vh;
+                    min-height: 100vh;
                     background-color: var(--color-bg);
                 }
 
@@ -211,14 +217,6 @@
                     }
                 }
 
-                @media (max-width: 1023px) {
-                    html.keyboard-open nav {
-                        display: none;
-                    }
-                    html.keyboard-open #app {
-                        height: 100svh; /* Use SVH for better mobile support */
-                    }
-                }
 
                 .nav-brand {
                     font-size: 1rem;
@@ -258,7 +256,6 @@
                     flex-direction: column;
                     gap: var(--space-lg);
                     padding: var(--space-md);
-                    overflow-y: auto;
                     align-items: stretch;
                 }
 
@@ -282,6 +279,10 @@
                         display: grid;
                         grid-template-columns: 1fr;
                         gap: var(--space-xl);
+                    }
+
+                    .right-column {
+                        grid-template-rows: auto auto auto 1fr;
                     }
                 }
 
@@ -368,7 +369,7 @@
                 /* Right Column */
                 .right-column {
                     display: grid;
-                    grid-template-rows: auto auto auto 1fr;
+                    grid-template-rows: auto auto;
                     gap: var(--space-xl);
                 }
 
@@ -800,20 +801,6 @@
                     }
                 })
 
-                // Keyboard visibility handler for mobile room optimization
-                if (window.visualViewport) {
-                    const originalHeight = window.visualViewport.height
-                    window.visualViewport.addEventListener("resize", () => {
-                        const isMobile = window.innerWidth < 1024
-                        const isKeyboardOpen = window.visualViewport.height < originalHeight * 0.85
-                        
-                        if (isMobile && isKeyboardOpen) {
-                            document.documentElement.classList.add("keyboard-open")
-                        } else {
-                            document.documentElement.classList.remove("keyboard-open")
-                        }
-                    })
-                }
             })
         </script>
     </body>
