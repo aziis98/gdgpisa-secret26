@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>minix.js</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+        <script defer src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            html,
+            body {
+                height: 100%;
+                background: #0d1117;
+                overflow: hidden;
+            }
+            #app {
+                display: grid;
+                grid-template-rows: 36px 1fr;
+                height: 100vh;
+            }
+            header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 0 12px;
+                background: #161b22;
+                border-bottom: 1px solid #21262d;
+                user-select: none;
+            }
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .title {
+                color: #484f58;
+                font:
+                    12px/1 "JetBrains Mono",
+                    monospace;
+                letter-spacing: 0.5px;
+            }
+            #tc {
+                padding: 8px;
+                height: 100%;
+            }
+            .xterm {
+                height: 100%;
+            }
+            @keyframes rotate360 {
+                from {
+                    transform: rotateZ(0deg);
+                }
+                to {
+                    transform: rotateZ(360deg);
+                }
+            }
+            #app.sl-rotate {
+                transform-origin: center;
+                animation: rotate360 2s linear 1;
+            }
+            .xterm-viewport::-webkit-scrollbar {
+                width: 6px;
+            }
+            .xterm-viewport::-webkit-scrollbar-thumb {
+                background: #30363d;
+                border-radius: 3px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <header>
+                <span class="dot dot-r"></span>
+                <span class="dot dot-y"></span>
+                <span class="dot dot-g"></span>
+                <span class="title">user@vm — minix.js</span>
+            </header>
+            <div id="tc"></div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+        <script type="module">
+            import { runPythonAsync } from "./lib/python-runner.js"
+
+            // ── System Intrinsics & Helpers ──────────────────────────────────────────────
+
+            const A = {
+                // ANSI
+                reset: "\x1b[0m",
+                bold: "\x1b[1m",
+                dim: "\x1b[2m",
+                red: "\x1b[31m",
+                green: "\x1b[32m",
+                yellow: "\x1b[33m",
+                blue: "\x1b[34m",
+                cyan: "\x1b[36m",
+                bBlack: "\x1b[90m",
+                bRed: "\x1b[91m",
+                bGreen: "\x1b[92m",
+                bBlue: "\x1b[94m",
+                bMagenta: "\x1b[95m",
+            }
+            const c = (col, s) => A[col] + s + A.reset
+            const parseFlags = args => {
+                const flags = new Set(),
+                    pos = []
+                for (const a of args) {
+                    if (a === "--") continue
+                    if (a.startsWith("--")) flags.add(a.slice(2))
+                    else if (a.startsWith("-") && a.length > 1) [...a.slice(1)].forEach(f => flags.add(f))
+                    else pos.push(a)
+                }
+                return { flags, pos }
+            }
+
+            const dedent = (text, prefix) => {
+                const lines = text.split("\n")
+                while (lines[0].trim().length === 0) lines.splice(0, 1)
+                while (lines.at(-1).trim().length === 0) lines.splice(-1, 1)
+                if (prefix === undefined) {
+                    prefix = lines[0].match(/^\s*/)?.[0] || ""
+                }
+                return (
+                    lines.map(line => (line.startsWith(prefix) ? line.slice(prefix.length) : line)).join("\n") +
+                    (lines.length > 0 ? "\n" : "")
+                )
+            }
+
+            // ── Module Loader ────────────────────────────────────────────────────────────
+
+            function loadBin(source) {
+                const code =
+                    "const module = { exports: {} };\n" +
+                    source.replace(/^\s*export\s+default\s+/, "module.exports = ") +
+                    "\nreturn module.exports;"
+                return new Function(code)()
+            }
+
+            const createBinary = fn => {
+                const fnStr = fn.toString()
+                const lines = fnStr.split("\n")
+                const bodyLinePrefix = lines.map(line => line.match(/^\s*/)?.[0] || "").find(p => p.length > 0) || ""
+                return dedent(`export default ${fnStr}`, bodyLinePrefix.slice(0, -4))
+            }
+
+            // ── Virtual Filesystem ───────────────────────────────────────────────────────
+
+            class VFS {
+                constructor() {
+                    this.root = this._mkdir("/", null)
+                    this.root.parent = this.root
+                    this.cwd = null
+                }
+                _mkdir(n, p) {
+                    return { type: "dir", name: n, children: new Map(), parent: p, mtime: Date.now(), mode: 0o755 }
+                }
+                _mkfile(name, content, parent) {
+                    return { type: "file", name, content, parent, mtime: Date.now(), mode: 0o644 }
+                }
+
+                mk(path, content) {
+                    const parts = path.split("/").filter(Boolean)
+                    let node = this.root
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        if (!node.children.has(parts[i])) node.children.set(parts[i], this._mkdir(parts[i], node))
+                        node = node.children.get(parts[i])
+                    }
+
+                    const f = this._mkfile(parts.pop(), content, node)
+                    node.children.set(f.name, f)
+                    return f
+                }
+
+                resolve(path, base) {
+                    let node = (path ?? "").startsWith("/") ? this.root : (base ?? this.cwd)
+                    for (const p of (path ?? "").split("/").filter(Boolean)) {
+                        if (p === ".") continue
+                        if (p === "..") {
+                            node = node.parent
+                            continue
+                        }
+                        if (node.type !== "dir") return null
+                        node = node.children.get(p)
+                        if (!node) return null
+                    }
+                    return node
+                }
+
+                pathOf(node) {
+                    const parts = []
+                    let n = node
+                    while (n !== this.root) {
+                        parts.unshift(n.name)
+                        n = n.parent
+                    }
+                    return "/" + parts.join("/")
+                }
+
+                _split(path, base) {
+                    const parts = path.split("/").filter(Boolean)
+                    const name = parts.pop()
+                    if (!name) return null
+                    const parentPath = (path.startsWith("/") ? "/" : "") + parts.join("/")
+                    const parent = parts.length
+                        ? this.resolve(parentPath, base)
+                        : path.startsWith("/")
+                          ? this.root
+                          : (base ?? this.cwd)
+                    return parent ? { parent, name } : null
+                }
+
+                write(path, content, base) {
+                    let node = this.resolve(path, base)
+                    if (!node) {
+                        const r = this._split(path, base)
+                        if (!r) return null
+                        node = this._mkfile(r.name, content, r.parent)
+                        r.parent.children.set(node.name, node)
+                    } else if (node.type === "file") {
+                        node.content = content
+                        node.mtime = Date.now()
+                    }
+                    return node
+                }
+            }
+
+            // ── The Shell (Metacircular Loader) ───────────────────────────────────────────
+
+            class Shell {
+                constructor(vfs, term) {
+                    this.vfs = vfs
+                    this.term = term
+                    this.env = new Map([
+                        ["HOME", "/home/user"],
+                        ["USER", "user"],
+                        ["HOSTNAME", "vm"],
+                        ["SHELL", "/bin/sh"],
+                        ["TERM", "xterm-256color"],
+                        ["PATH", "/bin"],
+                    ])
+                    this.history = []
+                    this.histIdx = -1
+                    this.buf = ""
+                    this.cur = 0
+                    this.running = false
+                    this.interrupted = false
+                }
+
+                get _prompt() {
+                    const p = this.vfs.pathOf(this.vfs.cwd).replace(/^\/home\/user/, "~")
+                    return `${c("bGreen", "user@vm")}:${c("bBlue", p)}$ `
+                }
+
+                prompt() {
+                    if (this.term.buffer.active.cursorX > 0) this.term.write("\r\n")
+                    this.term.write(this._prompt)
+                }
+
+                write(s) {
+                    this.term.write(s)
+                }
+                writeln(s = "") {
+                    this.term.write(s + "\r\n")
+                }
+                err(cmd, msg) {
+                    this.writeln(`${c("bRed", cmd + ":")} ${msg}`)
+                }
+
+                handleData(data) {
+                    if (this.running) {
+                        if (data === "\x03") {
+                            this.interrupted = true
+                            this.write("^C")
+                        }
+                        return
+                    }
+
+                    if (data.startsWith("\x1b[")) {
+                        switch (data) {
+                            case "\x1b[A":
+                            case "\x1bOA":
+                                this._hist(1)
+                                break
+                            case "\x1b[B":
+                            case "\x1bOB":
+                                this._hist(-1)
+                                break
+                            case "\x1b[C":
+                                if (this.cur < this.buf.length) {
+                                    this.cur++
+                                    this.write("\x1b[C")
+                                }
+                                break
+                            case "\x1b[D":
+                                if (this.cur > 0) {
+                                    this.cur--
+                                    this.write("\x1b[D")
+                                }
+                                break
+                            case "\x1b[H":
+                                this._moveTo(0)
+                                break
+                            case "\x1b[F":
+                                this._moveTo(this.buf.length)
+                                break
+                            case "\x1b[3~":
+                                if (this.cur < this.buf.length) {
+                                    this.buf = this.buf.slice(0, this.cur) + this.buf.slice(this.cur + 1)
+                                    this._redraw()
+                                }
+                                break
+                        }
+                        return
+                    }
+
+                    switch (data) {
+                        case "\r":
+                            this._enter()
+                            break
+                        case "\x7f":
+                        case "\x08":
+                            if (this.cur > 0) {
+                                this.buf = this.buf.slice(0, this.cur - 1) + this.buf.slice(this.cur)
+                                this.cur--
+                                this._redraw()
+                            }
+                            break
+                        case "\x03":
+                            this.writeln("^C")
+                            this.buf = ""
+                            this.cur = 0
+                            this.prompt()
+                            break
+                        case "\x0c":
+                            this.term.clear()
+                            break
+                        case "\x01":
+                            this._moveTo(0)
+                            break
+                        case "\x05":
+                            this._moveTo(this.buf.length)
+                            break
+                        case "\t":
+                            this._complete()
+                            break
+                        default:
+                            const printable = [...data].filter(ch => ch >= " ").join("")
+                            if (!printable) return
+                            this.buf = this.buf.slice(0, this.cur) + printable + this.buf.slice(this.cur)
+                            this.cur += printable.length
+                            this.cur === this.buf.length ? this.write(printable) : this._redraw()
+                    }
+                }
+
+                _redraw() {
+                    this.term.write("\r\x1b[K" + this._prompt + this.buf)
+                    if (this.buf.length > this.cur) this.term.write(`\x1b[${this.buf.length - this.cur}D`)
+                }
+
+                _moveTo(p) {
+                    const d = p - this.cur
+                    if (d < 0) this.term.write(`\x1b[${-d}D`)
+                    else if (d > 0) this.term.write(`\x1b[${d}C`)
+                    this.cur = p
+                }
+
+                _hist(d) {
+                    this.histIdx = Math.max(-1, Math.min(this.history.length - 1, this.histIdx + d))
+                    this.buf = this.histIdx >= 0 ? this.history[this.histIdx] : ""
+                    this.cur = this.buf.length
+                    this._redraw()
+                }
+
+                _enter() {
+                    this.write("\r\n")
+                    const line = this.buf
+                    this.buf = ""
+                    this.cur = 0
+                    if (line.trim()) {
+                        this.history.unshift(line)
+                        this.histIdx = -1
+                    }
+                    this.running = true
+                    this.interrupted = false
+                    this.exec(line).finally(() => {
+                        this.running = false
+                        this.prompt()
+                    })
+                }
+
+                _complete() {
+                    const tok = this.buf.slice(0, this.cur).split(/\s+/).pop()
+                    const isCmd = !this.buf.slice(0, this.cur).trim().includes(" ")
+                    const binNode = this.vfs.resolve("/bin")
+
+                    console.log("[_complete] token:", tok, "isCmd:", isCmd)
+
+                    let n
+                    let nodes = isCmd
+                        ? [...binNode.children.keys()].filter(k => k.startsWith(tok))
+                        : (n = this.vfs.resolve(tok) || this.vfs.cwd).type === "dir"
+                          ? [...n.children.keys()].filter(k => k.startsWith(tok))
+                          : []
+                    if (nodes.length === 1) {
+                        const childNode = n?.children.get(nodes[0])
+                        const add = nodes[0].slice(tok.length) + (childNode?.type === "dir" ? "/" : "")
+                        this.buf = this.buf.slice(0, this.cur) + add + this.buf.slice(this.cur)
+                        this.cur += add.length
+                        this._redraw()
+                    } else if (nodes.length > 1) {
+                        this.writeln("\r\n" + nodes.join("  "))
+                        this.term.write(this._prompt + this.buf)
+                    }
+                }
+
+                async exec(line) {
+                    const pipes = line.split(/(?<!\\)\|/).map(s => s.trim())
+                    let stdin = null
+                    for (const seg of pipes) {
+                        stdin = await this.runSeg(seg, stdin)
+                        if (stdin === null && pipes.length > 1) {
+                            this.err("pipe", "broken pipe")
+                            break
+                        }
+                    }
+                    if (stdin && typeof stdin === "string") this.write(stdin.replace(/\n/g, "\r\n"))
+                }
+
+                async runSeg(line, stdin) {
+                    const tokens = []
+                    let cur = "",
+                        inS = false,
+                        inD = false
+                    for (const ch of line) {
+                        if (ch === "'" && !inD) {
+                            inS = !inS
+                            continue
+                        }
+                        if (ch === '"' && !inS) {
+                            inD = !inD
+                            continue
+                        }
+                        if (ch === " " && !inS && !inD) {
+                            if (cur) {
+                                tokens.push(cur)
+                                cur = ""
+                            }
+                            continue
+                        }
+                        cur += ch
+                    }
+                    if (cur) tokens.push(cur)
+                    const args = tokens.map(t =>
+                        t.replace(/\$(\w+|\{.*?\})/g, (_, v) => this.env.get(v.replace(/[{}]/g, "")) || ""),
+                    )
+
+                    let outFile = null,
+                        append = false,
+                        cleanArgs = []
+                    for (let i = 0; i < args.length; i++) {
+                        if (args[i] === ">>") {
+                            outFile = args[++i]
+                            append = true
+                        } else if (args[i] === ">") {
+                            outFile = args[++i]
+                            append = false
+                        } else cleanArgs.push(args[i])
+                    }
+
+                    const [cmd, ...rest] = cleanArgs
+                    if (!cmd) return stdin
+
+                    if (cmd === "cd") {
+                        const target = rest[0]?.replace(/^~/, this.env.get("HOME")) || this.env.get("HOME")
+                        const node = this.vfs.resolve(target)
+                        if (!node || node.type !== "dir") this.err("cd", `not a directory: ${target}`)
+                        else {
+                            this.vfs.cwd = node
+                            this.env.set("PWD", this.vfs.pathOf(node))
+                        }
+                        return null
+                    }
+                    if (cmd === "export") {
+                        rest.forEach(a => {
+                            const [k, v] = a.split("=")
+                            if (v) this.env.set(k, v)
+                        })
+                        return null
+                    }
+                    if (cmd === "exit") {
+                        this.writeln("logout")
+                        return null
+                    }
+
+                    const binNode = this.vfs.resolve(`/bin/${cmd}`)
+                    if (!binNode || binNode.type !== "file") {
+                        this.err(cmd, "command not found")
+                        return null
+                    }
+
+                    try {
+                        const fn = loadBin(binNode.content)
+                        if (typeof fn !== "function") throw new Error("Invalid executable")
+
+                        // Provide rich context for command execution, including VFS access, terminal control, environment variables, and Python integration
+                        const ctx = {
+                            env: this.env,
+                            fs: this.vfs,
+                            term: this.term,
+                            A,
+                            c,
+                            parseFlags,
+                            runPythonAsync,
+                            sh: this,
+                            shellDataDisposable,
+                            stdin: stdin ? stdin.replace(/\r\n/g, "\n") : null,
+                            signal: { interrupted: () => this.interrupted },
+                            mountPythonInput,
+                            unmountPythonInput,
+                            readLine: readLineAsync,
+                            async wait(ms) {
+                                await new Promise(r => setTimeout(r, ms))
+                            },
+                        }
+
+                        const out = await fn(rest, ctx)
+
+                        if (outFile) {
+                            const text = typeof out === "string" ? out : ""
+                            const existing = this.vfs.resolve(outFile)
+                            this.vfs.write(outFile, append && existing ? existing.content + text : text)
+                            return null
+                        }
+                        return out
+                    } catch (e) {
+                        this.err(cmd, e.message)
+                        return null
+                    }
+                }
+            }
+
+            // ── Boot Sequence ─────────────────────────────────────────────────────────────
+
+            const vfs = new VFS()
+            const term = new Terminal({
+                fontFamily: '"JetBrains Mono", "Cascadia Code", monospace',
+                fontSize: 14,
+                lineHeight: 1.4,
+                cursorBlink: true,
+                convertEol: false,
+                scrollback: 5000,
+                theme: {
+                    background: "#0d1117",
+                    foreground: "#e6edf3",
+                    cursor: "#7ee787",
+                    cursorAccent: "#0d1117",
+                    black: "#21262d",
+                    red: "#ff7b72",
+                    green: "#3fb950",
+                    yellow: "#d29922",
+                    blue: "#388bfd",
+                    magenta: "#a371f7",
+                    cyan: "#39c5cf",
+                    white: "#b1bac4",
+                    brightBlack: "#6e7681",
+                    brightRed: "#ffa198",
+                    brightGreen: "#56d364",
+                    brightYellow: "#e3b341",
+                    brightBlue: "#79c0ff",
+                    brightMagenta: "#d2a8ff",
+                    brightCyan: "#56d364",
+                    brightWhite: "#f0f6fc",
+                },
+            })
+            const fit = new FitAddon.FitAddon()
+            term.loadAddon(fit)
+            term.open(document.getElementById("tc"))
+
+            window.term = term
+
+            fit.fit()
+            window.addEventListener("resize", () => fit.fit())
+
+            // Track shell data disposable for input handling in Python
+            let shellDataDisposable
+
+            // --- Filesystem Population (fixed: dirs properly registered in parent.children) ---
+
+            const home = vfs._mkdir("home", vfs.root)
+            vfs.root.children.set("home", home)
+            const user = vfs._mkdir("user", home)
+            home.children.set("user", user)
+            vfs.cwd = user
+            vfs.env = new Map([
+                ["HOME", "/home/user"],
+                ["USER", "user"],
+                ["HOSTNAME", "vm"],
+                ["SHELL", "/bin/sh"],
+                ["TERM", "xterm-256color"],
+                ["PATH", "/bin"],
+                ["PWD", "/home/user"],
+            ])
+            const bin = vfs._mkdir("bin", vfs.root)
+            vfs.root.children.set("bin", bin)
+
+            // --- Commands ---
+
+            vfs.mk(
+                "/bin/ls",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: ls [OPTION]... [FILE]...\nList directory contents.\nOptions:\n  -a          include hidden files\n  -l          use long listing format\n  -h, --help  show this help message\n"
+                    }
+                    const { fs, c, parseFlags } = ctx
+                    const { flags, pos } = parseFlags(args)
+                    const showAll = flags.has("a"),
+                        long = flags.has("l")
+                    const target = pos.length ? pos[0] : "."
+                    const node = fs.resolve(target)
+                    if (!node) return "ls: cannot access '" + target + "': No such file or directory\n"
+                    const list = node.type === "dir" ? [...node.children.values()] : [node]
+                    const visible = list.filter(n => showAll || !n.name.startsWith("."))
+                    const fmtName = n =>
+                        n.type === "dir" ? c("bBlue", n.name + "/") : n.mode & 0o111 ? c("bGreen", n.name) : n.name
+                    if (!long) return visible.map(fmtName).join("  ") + "\n"
+                    const fmtMode = n => {
+                        const t = n.type === "dir" ? "d" : "-"
+                        const r = v => [(v >> 2) & 1 ? "r" : "-", (v >> 1) & 1 ? "w" : "-", v & 1 ? "x" : "-"].join("")
+                        return t + r(n.mode >> 6) + r((n.mode >> 3) & 7) + r(n.mode & 7)
+                    }
+                    const fmtDate = t => {
+                        const d = new Date(t)
+                        const mo = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ")[d.getMonth()]
+                        return (
+                            mo +
+                            " " +
+                            String(d.getDate()).padStart(2) +
+                            " " +
+                            String(d.getHours()).padStart(2, "0") +
+                            ":" +
+                            String(d.getMinutes()).padStart(2, "0")
+                        )
+                    }
+                    const maxSz = Math.max(
+                        0,
+                        ...visible.map(n => String(n.type === "file" ? n.content.length : 0).length),
+                    )
+                    return (
+                        visible
+                            .map(n => {
+                                const sz = String(n.type === "file" ? n.content.length : 0).padStart(maxSz)
+                                return fmtMode(n) + " 1 user user " + sz + " " + fmtDate(n.mtime) + " " + fmtName(n)
+                            })
+                            .join("\n") + "\n"
+                    )
+                }),
+            )
+
+            vfs.mk(
+                "/bin/cat",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: cat [FILE]...\nConcatenate files and print to stdout.\n  -h, --help  show this help message\n"
+                    }
+                    const { fs, stdin } = ctx
+                    if (!args.length) return stdin || ""
+                    return args
+                        .map(f => {
+                            const n = fs.resolve(f)
+                            return !n
+                                ? "cat: " + f + ": No such file\n"
+                                : n.type === "dir"
+                                  ? "cat: Is directory\n"
+                                  : n.content
+                        })
+                        .join("")
+                }),
+            )
+
+            vfs.mk(
+                "/bin/echo",
+                createBinary(args => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: echo [STRING]...\nPrint arguments to stdout.\n  -h, --help  show this help message\n"
+                    }
+                    return args.join(" ").replace(/\\n/g, "\n") + "\n"
+                }),
+            )
+            vfs.mk(
+                "/bin/clear",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: clear\nClear the terminal.\n  -h, --help  show this help message\n"
+                    }
+                    ctx.term.clear()
+                    return null
+                }),
+            )
+            vfs.mk(
+                "/bin/pwd",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: pwd\nPrint the current working directory.\n  -h, --help  show this help message\n"
+                    }
+                    return ctx.env.get("PWD") + "\n"
+                }),
+            )
+            vfs.mk(
+                "/bin/whoami",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: whoami\nPrint the current user.\n  -h, --help  show this help message\n"
+                    }
+                    return ctx.env.get("USER") + "\n"
+                }),
+            )
+            vfs.mk(
+                "/bin/date",
+                createBinary(args => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: date\nPrint the current date and time.\n  -h, --help  show this help message\n"
+                    }
+                    return new Date().toString() + "\n"
+                }),
+            )
+            vfs.mk(
+                "/bin/uname",
+                createBinary(args => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: uname [OPTION]\nPrint system information.\nOptions:\n  -a          print all information\n  -h, --help  show this help message\n"
+                    }
+                    return args[0] === "-a" ? "MockOS 1.0 vm 1.0.0 x86_64 GNU/Linux\n" : "MockOS\n"
+                }),
+            )
+            vfs.mk(
+                "/bin/help",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: help\nDisplay available commands.\n  -h, --help  show this help message\n"
+                    }
+                    const progs = [...ctx.fs.resolve("/bin").children.keys()]
+                    return ctx.c("bold", "Available commands:\n") + progs.join("  ") + "\n"
+                }),
+            )
+
+            vfs.mk(
+                "/bin/sl",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: sl\nOpposite of ls.\n  -h, --help  show this help message\n"
+                    }
+                    const app = document.getElementById("app")
+                    app.classList.add("sl-rotate")
+                    setTimeout(() => app.classList.remove("sl-rotate"), 2000)
+                    return null
+                }),
+            )
+
+            vfs.mk(
+                "/bin/find",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: find [PATH] [OPTION]...\nSearch for files in a directory hierarchy.\nOptions:\n  -name PATTERN  match files by name\n  -type TYPE     match files by type (f=file, d=directory)\n  -h, --help     show this help message\n"
+                    }
+                    const { fs } = ctx
+                    const root = args[0] && !args[0].startsWith("-") ? args[0] : "."
+                    const nameIdx = args.indexOf("-name"),
+                        typeIdx = args.indexOf("-type")
+                    const namePat = nameIdx >= 0 ? args[nameIdx + 1] : null
+                    const typeFilter = typeIdx >= 0 ? args[typeIdx + 1] : null
+                    const startNode = fs.resolve(root)
+                    if (!startNode) return "find: " + root + ": No such file or directory\n"
+                    const glob = (pat, str) =>
+                        new RegExp(
+                            "^" +
+                                pat
+                                    .replace(/[.+^{}$()|[\]\\]/g, "\\$&")
+                                    .replace(/\*/g, ".*")
+                                    .replace(/\?/g, ".") +
+                                "$",
+                        ).test(str)
+                    const results = []
+                    const walk = (node, path) => {
+                        const nameOk = !namePat || glob(namePat, node.name)
+                        const typeOk =
+                            !typeFilter ||
+                            (typeFilter === "f" && node.type === "file") ||
+                            (typeFilter === "d" && node.type === "dir")
+                        if (nameOk && typeOk) results.push(path)
+                        if (node.type === "dir")
+                            for (const [name, child] of node.children)
+                                walk(child, path === "/" ? "/" + name : path + "/" + name)
+                    }
+                    if (startNode.type === "dir") {
+                        if (!namePat && !typeFilter) results.push(root)
+                        for (const [name, child] of startNode.children)
+                            walk(child, root === "/" ? "/" + name : root + "/" + name)
+                    } else {
+                        walk(startNode, root)
+                    }
+                    return results.join("\n") + "\n"
+                }),
+            )
+
+            vfs.mk(
+                "/bin/grep",
+                createBinary((args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: grep [OPTION]... PATTERN [FILE]...\nSearch for lines matching a pattern.\nOptions:\n  -i          ignore case\n  -v          invert match (show non-matching lines)\n  -n          print line numbers\n  -r, -R      search recursively\n  -h, --help  show this help message\n"
+                    }
+                    const { fs, c, parseFlags } = ctx
+                    const { flags, pos } = parseFlags(args)
+                    const [pattern, ...files] = pos
+                    if (!pattern) return "grep: missing pattern\n"
+                    const re = new RegExp(pattern, flags.has("i") ? "i" : "")
+                    const invert = flags.has("v"),
+                        lineNums = flags.has("n"),
+                        recursive = flags.has("r") || flags.has("R")
+                    const multiFile = files.length > 1 || recursive
+                    const grepLines = (text, label) => {
+                        const out = []
+                        text.split("\n").forEach((line, i) => {
+                            const hit = re.test(line)
+                            if (hit !== invert) {
+                                const pre =
+                                    (label ? c("bMagenta", label) + ":" : "") +
+                                    (lineNums ? c("yellow", String(i + 1)) + ":" : "")
+                                out.push(pre + (invert ? line : line.replace(re, m => c("bRed", m))))
+                            }
+                        })
+                        return out
+                    }
+                    const results = []
+                    const grepNode = (node, path) => {
+                        if (node.type === "file") results.push(...grepLines(node.content, multiFile ? path : null))
+                        else if (recursive && node.type === "dir")
+                            for (const [name, child] of node.children)
+                                grepNode(child, path === "/" ? "/" + name : path + "/" + name)
+                    }
+                    if (!files.length) {
+                        if (ctx.stdin) results.push(...grepLines(ctx.stdin, null))
+                    } else {
+                        for (const f of files) {
+                            const node = fs.resolve(f)
+                            if (!node) {
+                                results.push("grep: " + f + ": No such file or directory")
+                                continue
+                            }
+                            grepNode(node, f)
+                        }
+                    }
+                    return results.join("\n") + (results.length ? "\n" : "")
+                }),
+            )
+
+            vfs.mk(
+                "/bin/python",
+                createBinary(async (args, ctx) => {
+                    if (args.includes("-h") || args.includes("--help")) {
+                        return "Usage: python [OPTIONS] [FILE] [ARGS]...\nRun Python code.\nOptions:\n  -c CODE     run code string\n  -h, --help  show this help message\n"
+                    }
+                    const isCodeFlag = args[0] === "-c"
+                    const code = isCodeFlag ? args[1] : ctx.fs.resolve(args[0])?.content
+                    if (!code) return "python: missing script or -c\n"
+
+                    // Determine script name and remaining args
+                    let scriptName = "script.py"
+                    let scriptArgs = []
+
+                    if (isCodeFlag) {
+                        scriptName = "-c"
+                        scriptArgs = args.slice(2) // args after the code
+                    } else {
+                        scriptName = args[0]
+                        scriptArgs = args.slice(1) // args after the script name
+                    }
+
+                    if (!window.__py) {
+                        ctx.term.write("Initializing Python...\r\n")
+                        if (!window.loadPyodide) {
+                            await new Promise(r => {
+                                const s = document.createElement("script")
+                                s.src = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"
+                                s.onload = r
+                                document.head.appendChild(s)
+                            })
+                        }
+                        window.__py = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" })
+                    }
+
+                    // Create VFS adapter with read/write methods
+                    const vfsAdapter = {
+                        read(path) {
+                            console.log("[vfsAdapter] Reading path:", path)
+
+                            const node = ctx.fs.resolve(path)
+                            if (node && node.type === "file") {
+                                return node.content
+                            }
+                            return null
+                        },
+                        write(path, content) {
+                            ctx.fs.write(path, content)
+                        },
+                        exists(path) {
+                            const node = ctx.fs.resolve(path)
+                            return node !== null
+                        },
+                    }
+
+                    // Mount Python input handler
+                    ctx.mountPythonInput()
+
+                    try {
+                        const output = await ctx.runPythonAsync(code, {
+                            py: window.__py,
+                            vfs: vfsAdapter,
+                            stdoutWrite: async text => {
+                                ctx.term.write(text.replace(/\n/g, "\r\n"))
+                                await new Promise(resolve => setTimeout(resolve, 1))
+                            },
+                            readLine: ctx.readLine,
+                            scriptName,
+                            scriptArgs,
+                            stdin: ctx.stdin || null,
+                        })
+
+                        return ctx.stdin ? output : null
+                    } finally {
+                        // Always unmount Python input handler
+                        ctx.unmountPythonInput()
+                    }
+                }),
+            )
+
+            // User Files
+            vfs.mk(
+                "/home/user/hello.py",
+                dedent(`
+                    print("Hello from Pyodide inside minix.js!")
+                    name = input("Your name? ")
+                    print(f"Hi, {name}")
+                `),
+            )
+
+            // Dynamically loaded files
+            ;(async () => {
+                const filesToLoad = [
+                    {
+                        url: "/home/vocab.json",
+                        path: "/home/user/vocab.json",
+                    },
+                    {
+                        url: "/home/infer.py",
+                        path: "/home/user/infer.py",
+                    },
+                    {
+                        url: "/home/model_weights.json",
+                        path: "/home/user/model_weights.json",
+                    },
+                ]
+
+                for (const file of filesToLoad) {
+                    fetch(file.url)
+                        .then(r => r.text())
+                        .then(c => vfs.mk(file.path, c))
+                        .catch(e => console.warn(`Could not fetch ${file.url}`))
+                }
+            })()
+
+            // Init Shell
+            const sh = new Shell(vfs, term)
+            // Override env with correct PWD now that cwd is set
+            sh.env.set("PWD", "/home/user")
+            shellDataDisposable = term.onData(d => sh.handleData(d))
+
+            // Terminal I/O mount/unmount system for Python execution
+            let pythonInputBuffer = ""
+            let pythonInputResolve = null
+            let pythonDataDisposable = null
+
+            const mountPythonInput = () => {
+                console.log("[mountPythonInput] Mounting Python input handler")
+                if (shellDataDisposable) {
+                    shellDataDisposable.dispose()
+                    shellDataDisposable = null
+                }
+
+                pythonInputBuffer = ""
+                pythonInputResolve = null
+
+                pythonDataDisposable = term.onData(data => {
+                    console.log("[pythonHandler] Received data:", JSON.stringify(data))
+
+                    if (pythonInputResolve === null) return
+
+                    if (data === "\r") {
+                        console.log("[pythonHandler] Enter pressed, input:", pythonInputBuffer)
+                        term.write("\r\n")
+                        const input = pythonInputBuffer
+                        pythonInputBuffer = ""
+                        pythonInputResolve(input)
+                        pythonInputResolve = null
+                    } else if (data === "\x7f" || data === "\x08") {
+                        // Backspace
+                        if (pythonInputBuffer.length > 0) {
+                            pythonInputBuffer = pythonInputBuffer.slice(0, -1)
+                            term.write("\x08 \x08")
+                        }
+                    } else if (data === "\x03") {
+                        // Ctrl+C: abort input
+                        console.log("[pythonHandler] Ctrl+C pressed")
+                        term.write("\r\n")
+                        pythonInputBuffer = ""
+                        pythonInputResolve("")
+                        pythonInputResolve = null
+                    } else if (data === "\x0c") {
+                        // Ctrl+L: clear screen
+                        term.clear()
+                    } else if (data >= " ") {
+                        // Regular character
+                        pythonInputBuffer += data
+                        term.write(data)
+                    }
+                })
+            }
+
+            const unmountPythonInput = () => {
+                console.log("[unmountPythonInput] Unmounting Python input handler")
+                if (pythonDataDisposable) {
+                    pythonDataDisposable.dispose()
+                    pythonDataDisposable = null
+                }
+                pythonInputBuffer = ""
+                pythonInputResolve = null
+                // Restore shell handler
+                shellDataDisposable = term.onData(d => sh.handleData(d))
+            }
+
+            const readLineAsync = async () => {
+                return await new Promise(resolve => {
+                    pythonInputResolve = resolve
+                })
+            }
+
+            document.getElementById("tc").addEventListener("click", () => term.focus())
+            term.focus()
+
+            // Welcome
+            term.writeln(c("bGreen", "┌───(minix.js)───"))
+            term.writeln(c("bGreen", "│") + " Minimal metacircular shell + Python.")
+            term.writeln(c("bGreen", "└───") + c("bBlack", ' type "help" or "python hello.py".'))
+            sh.prompt()
+        </script>
+    </body>
+</html>

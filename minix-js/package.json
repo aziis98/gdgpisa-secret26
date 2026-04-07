@@ -1,0 +1,19 @@
+{
+    "type": "module",
+    "dependencies": {
+        "pyodide": "^0.26.4"
+    },
+    "name": "vm-sh",
+    "version": "1.0.0",
+    "description": "",
+    "main": "test_async_stdin.js",
+    "directories": {
+        "lib": "lib"
+    },
+    "scripts": {
+        "test": "node lib/test-python-runner.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC"
+}
