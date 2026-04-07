@@ -502,9 +502,9 @@ export async function mount(element, options = {}) {
 
                 Binaries in ${c("bBlue", "/bin/")} are modular JS files following a simple functional schema: ${c("bold", "(args, ctx) => string | Promise<string>")}. Minimal example:
 
-                    ${c("bRed", "export")} ${c("bRed", "default")} (${c("bBlue", "args")}, ${c("bBlue", "ctx")}) ${c("bold", "=>")} {
-                        ${c("bRed", "return")} ${c("bGreen", "\"Hello \"")} + ${c("bBlue", "args")}[${c("bMagenta", "0")}];
-                    }
+                  ${c("bRed", "export")} ${c("bRed", "default")} (${c("bBlue", "args")}, ${c("bBlue", "ctx")}) ${c("bold", "=>")} {
+                    ${c("bRed", "return")} ${c("bGreen", "\"Hello \"")} + ${c("bBlue", "args")}[${c("bMagenta", "0")}];
+                  }
                 
                 This was just made for fun! I originally intended to use Fabrice Bellard's JSLinux to run an emulated RISC-V or x86_64 kernel in the browser; however, technical constraints¹ made it difficult to install Python on it. So I developed this simulated terminal environment from scratch (with much llm help) using ${c("bBlue", "xterm.js")} and ${c("bBlue", "Pyodide")}. I plan to publish the source code, along with the modified MicroGPT training scripts, on my ${c("bBlue", "GitHub")} after the event.
                 ${c("dim", `¹: Feel free to ask me at the "birrata" if you want to know more`)}
