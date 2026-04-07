@@ -180,6 +180,46 @@
                     box-shadow: 0 4px 0 0 var(--color-border);
                 }
 
+                @media (max-width: 1023px) {
+                    nav {
+                        grid-template-columns: 1fr;
+                        gap: var(--space-sm);
+                        padding: var(--space-md);
+                    }
+                    .nav-brand {
+                        display: contents;
+                    }
+                    .window-dots {
+                        justify-self: start;
+                        order: 1;
+                    }
+                    .nav-brand span {
+                        justify-self: center;
+                        font-family: inherit;
+                        font-weight: 900;
+                        font-size: 0.8rem;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                        order: 2;
+                    }
+                    nav > div:nth-child(2) {
+                        display: none;
+                    }
+                    .nav-controls {
+                        justify-self: end;
+                        order: 3;
+                    }
+                }
+
+                @media (max-width: 1023px) {
+                    html.keyboard-open nav {
+                        display: none;
+                    }
+                    html.keyboard-open #app {
+                        height: 100svh; /* Use SVH for better mobile support */
+                    }
+                }
+
                 .nav-brand {
                     font-size: 1rem;
                     font-weight: 900;
@@ -756,6 +796,21 @@
                         location.reload()
                     }
                 })
+
+                // Keyboard visibility handler for mobile room optimization
+                if (window.visualViewport) {
+                    const originalHeight = window.visualViewport.height
+                    window.visualViewport.addEventListener("resize", () => {
+                        const isMobile = window.innerWidth < 1024
+                        const isKeyboardOpen = window.visualViewport.height < originalHeight * 0.85
+                        
+                        if (isMobile && isKeyboardOpen) {
+                            document.documentElement.classList.add("keyboard-open")
+                        } else {
+                            document.documentElement.classList.remove("keyboard-open")
+                        }
+                    })
+                }
             })
         </script>
     </body>
