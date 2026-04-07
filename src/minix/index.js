@@ -506,7 +506,7 @@ export async function mount(element, options = {}) {
                         ${c("bRed", "return")} ${c("bGreen", "\"Hello \"")} + ${c("bBlue", "args")}[${c("bMagenta", "0")}];
                     }
                 
-                This was just made for fun, initially I hoped of using Fabrice Bellard's JSLinux to run a real linux kernel in the browser, but for reasons¹ I couldn't easily add python support to it. So I decided to make this fake terminal in pure js using ${c("bBlue", "xterm.js")} (and a log of vicecoding). I think I'll publish this with the microgpt training code on ${c("bBlue", "GitHub")} after the event.
+                This was just made for fun, initially I hoped of using Fabrice Bellard's JSLinux to run a real linux kernel in the browser, but for reasons¹ I couldn't easily add python support to it. So I decided to make this fake terminal in pure js using ${c("bBlue", "xterm.js")} and a lot of vicecoding. I think I'll publish this with the microgpt training code on ${c("bBlue", "GitHub")} after the event.
                 ${" ".repeat(actualWidth - "by @aziis98".length)}by ${c("bMagenta", "@aziis98")}
                 ${c("dim", `¹: Feel free to ask me at "birrata" if you want to know more`)}
             `
