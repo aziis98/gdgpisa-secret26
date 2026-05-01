@@ -1,6 +1,8 @@
 # secret26 - GDGPisa Secret DevFest 2026 CTF
 
-Welcome to the **secret26** repository. This project was made for the [GDGPisa 2026 DevFest](https://devfest.gdgpisa.it/) event. It simulates an isolated terminal environment ("Minix JS") for a localized recovery mission of the **classified DevBot secret code**.
+Welcome to the **secret26** repository. This project was made for the [GDGPisa 2026 DevFest](https://devfest.gdgpisa.it/) event and deployed at [https://secret26.gdgpisa.it/](https://secret26.gdgpisa.it/). The event is now over so I polished the project a bit and made it open source.
+
+The project simulates an isolated terminal environment ("Minix JS") for a localized recovery mission of the **classified DevBot secret code**.
 
 ## Features
 
