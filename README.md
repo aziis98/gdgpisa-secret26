@@ -5,12 +5,17 @@ Welcome to the **secret26** repository. This project is a high-fidelity, neo-bru
 ## Features
 
 - **Minix JS Metacircular Shell**: A custom, modular shell environment built on top of [xterm.js](https://xtermjs.org/).
-- **Virtual Filesystem (VFS)**: A robust, in-memory filesystem with support for standard Unix utilities (`ls`, `cat`, `mkdir`, `rm`, `touch`, `cp`, `mv`).
-- **Python Integration**: Direct access to a complete Python 3 runtime via [Pyodide](https://pyodide.org/), including asynchronous I/O and VFS-aware file operations.
+- **Virtual Filesystem (VFS)**: A robust, in-memory filesystem with support for standard Unix utilities:
+  - **File Operations**: `ls`, `cat`, `mkdir`, `rm`, `touch`, `cp`, `mv`.
+  - **Text Processing**: `grep`, `find`, `head`, `tail`.
+  - **System Info**: `pwd`, `whoami`, `date`, `uname`, `man`.
+  - **Utilities**: `echo`, `clear`, `help`, `sl`.
+  - **Interactive Tools**: `edit` (built-in modal text editor).
+- **Python Integration**: Direct access to a complete **Python 3.11+** runtime via [Pyodide](https://pyodide.org/), including asynchronous I/O, VFS-aware file operations, and access to the standard library.
 - **Persistence Layer**: Automated state saving to `localStorage`, ensuring user progress (files, command history, and environment) is preserved across sessions.
 - **System Visualizations**: 
-  - **Datamatrix RAM Snapshot**: Real-time visualization of the system's memory state rendered as a pixelated data matrix.
-  - **Live Stats Grid**: Tactical monitoring of VFS nodes, memory usage, and shell activity.
+  - **Datamatrix RAM Snapshot**: Real-time visualization of the system's memory state (serialized VFS + Shell state) rendered as a pixelated data matrix.
+  - **Live Stats Grid**: Tactical monitoring of VFS nodes, memory usage, current directory, and shell activity.
 - **Neo-Brutalist Aesthetic**: A high-contrast, tactile UI designed for maximum impact and readability in a "hacker" context.
 
 ## Tech Stack

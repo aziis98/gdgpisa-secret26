@@ -1,12 +1,13 @@
 # MicroGPT Implementation for DevBot
 
-This directory contains a minimalist, zero-dependency GPT implementation used for the DevBot localized recovery mission. The core logic is based on Andrej Karpathy's `microGPT`, which has been further optimized and refactored for this CTF.
+This directory contains a minimalist, zero-dependency GPT implementation used for the DevBot localized recovery mission. The core logic is based on Andrej Karpathy's [microGPT](https://karpathy.ai/microgpt.html), which has been further optimized and refactored for this CTF.
 
 ## Refinement and Optimization
 
 The original `microGPT` architecture has been adapted through several key modifications:
-- **Component Split**: The system has been decoupled into two dedicated scripts: `train.py` for model optimization and `infer.py` for browser-based text generation.
-- **Torch-Optimized Training**: The `train.py` and `train_fast.py` scripts have been rewritten for enhanced performance, leveraging a streamlined **PyTorch** backend to ensure rapid convergence.
+- **Component Split**: The system has been decoupled into dedicated scripts for training and inference.
+- **Pure-Python Autograd**: The `train.py` script implements a GPT architecture from scratch using a custom autograd engine (based on Andrej Karpathy's `micrograd`).
+- **Torch-Optimized Training**: The `train_fast.py` script leverages **PyTorch** for high-performance model optimization, ensuring rapid convergence.
 - **Standalone Inference**: The `infer.py` module is designed to run independently of the training framework, making it suitable for deployment in the Pyodide environment within the CTF dashboard.
 
 ## Core Components and CLI Options

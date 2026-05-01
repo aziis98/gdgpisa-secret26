@@ -1,0 +1,3 @@
+# Technical Notes
+
+I spent a lot of time figuring out how to make this terminal feel like a real system. The "metacircular" shell was my first experiment in running JS functions as binaries, which laid the groundwork for the whole command system. The hardest part was definitely the stdin handling—since Pyodide is synchronous and the browser is async, I had to find a way to patch the code on the fly so it could wait for user input without completely locking up the UI. I also built a virtual filesystem using nested JS objects so I could simulate a real directory structure that saves and loads instantly without needing a server.
