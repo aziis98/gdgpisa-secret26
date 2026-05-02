@@ -8,7 +8,7 @@
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
-            href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Google+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
             rel="stylesheet"
         />
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
@@ -32,31 +32,6 @@
             @layer reset, base, theme, components, layout;
 
             @layer reset {
-                @font-face {
-                    font-family: 'Product Sans';
-                    src: url('./src/fonts/product-sans-regular.ttf') format('truetype');
-                    font-weight: 400;
-                    font-style: normal;
-                }
-                @font-face {
-                    font-family: 'Product Sans';
-                    src: url('./src/fonts/product-sans-bold.ttf') format('truetype');
-                    font-weight: 700;
-                    font-style: normal;
-                }
-                @font-face {
-                    font-family: 'Product Sans';
-                    src: url('./src/fonts/product-sans-italic.ttf') format('truetype');
-                    font-weight: 400;
-                    font-style: italic;
-                }
-                @font-face {
-                    font-family: 'Product Sans';
-                    src: url('./src/fonts/product-sans-bold-italic.ttf') format('truetype');
-                    font-weight: 700;
-                    font-style: italic;
-                }
-
                 *,
                 *::before,
                 *::after {
@@ -71,7 +46,7 @@
 
                 body {
                     min-height: 100%;
-                    font-family: "Product Sans", "Inter", sans-serif;
+                    font-family: "Google Sans", "Inter", sans-serif;
                     line-height: 1.5;
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
@@ -408,6 +383,12 @@
                     font-weight: 500;
                 }
 
+                .prompt-text a {
+                    color: inherit;
+                    font-weight: 700;
+                    text-decoration: underline;
+                }
+
                 .prompt-text p + p {
                     margin-top: 1.25rem;
                 }
@@ -600,8 +581,15 @@
                         RESET FILESYSTEM
                     </button>
                 </div>
-
+                
                 <div class="right-column">
+                    <div class="prompt-card">
+                        <div class="prompt-text">
+                            <p>
+                                Update: The event is now over! I have open sourced this project, and you can find the full source code on <a href="https://github.com/aziis98/gdgpisa-secret26" target="_blank">GitHub</a>.
+                            </p>
+                        </div>
+                    </div>
                     <div class="prompt-card">
                         <div class="prompt-text">
                             <p>
